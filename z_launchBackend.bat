@@ -1,0 +1,1 @@
+.venv\Scripts\uvicorn.exe backend.main:app --reload
