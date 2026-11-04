@@ -1,0 +1,2 @@
+{ "id": 12, "name": "Carcassonne", "min_players": 2, "max_players": 5,
+  "best_players": 3, "playing_time": 35, "complexity": 1.9 }
