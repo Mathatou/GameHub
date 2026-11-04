@@ -1,0 +1,38 @@
+[
+  {
+    "id": "1",
+    "title": "Catan",
+    "min_players": 3,
+    "max_players": 4,
+    "best_player_count": 4,
+    "explanation_time_min": 15,
+    "play_style": "competitive",
+    "luck_level": "medium",
+    "profile_category": "amateur",
+    "status": "available"
+  },
+  {
+    "id": "2",
+    "title": "Codenames",
+    "min_players": 2,
+    "max_players": 8,
+    "best_player_count": 6,
+    "explanation_time_min": 5,
+    "play_style": "competitive",
+    "luck_level": "low",
+    "profile_category": "family",
+    "status": "available"
+  },
+  {
+    "id": "3",
+    "title": "Shards of Infinity",
+    "min_players": 2,
+    "max_players": 4,
+    "best_player_count": 2,
+    "explanation_time_min": 10,
+    "play_style": "competitive",
+    "luck_level": "moderate",
+    "profile_category": "friends",
+    "status": "available"
+  }
+]
