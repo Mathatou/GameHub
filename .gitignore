@@ -1,4 +1,3 @@
 .venv/
 __pycache__/
-data/bgg_dataset.csv
-data/library.json
+data/
