@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Board Game Finder</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>Board Game Finder</h1>
+
+    <section class="panel">
+      <div class="source">
+        <label><input type="radio" name="source" value="catalog" checked> Catalog</label>
+        <label><input type="radio" name="source" value="library"> My library</label>
+      </div>
+      <div class="filters">
+        <label>Players <input id="players" type="number" min="1" placeholder="any"></label>
+        <label>Max time (min) <input id="maxTime" type="number" min="1" placeholder="any"></label>
+        <label>Max complexity (1-5) <input id="maxComplexity" type="number" min="1" max="5" step="0.1" placeholder="any"></label>
+      </div>
+      <div class="actions">
+        <button id="searchBtn">Search</button>
+        <button id="randomBtn" class="secondary">Pick random</button>
+      </div>
+    </section>
+
+    <p id="message"></p>
+    <div id="randomResult"></div>
+    <ul id="results"></ul>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
