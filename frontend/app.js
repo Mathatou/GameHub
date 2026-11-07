@@ -1,69 +1,109 @@
-const $ = (id) => document.getElementById(id);
+const { createApp, ref, computed } = Vue;
 
-function getSource() {
-  return document.querySelector('input[name="source"]:checked').value;
-}
-
-// Blank fields are simply not sent, so the backend ignores them
-function buildParams() {
-  const params = new URLSearchParams({ source: getSource() });
-  if ($("players").value) params.append("players", $("players").value);
-  if ($("maxTime").value) params.append("max_time", $("maxTime").value);
-  if ($("maxComplexity").value) params.append("max_complexity", $("maxComplexity").value);
-  return params;
-}
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-function gameLine(g) {
-  return `${escapeHtml(g.name)} (${g.min_players}-${g.max_players} players, ` +
+function describeGame(g) {
+  return `${g.name} (${g.min_players}-${g.max_players} players, ` +
          `${g.playing_time} min, complexity ${g.complexity.toFixed(1)})`;
 }
 
-async function search() {
-  $("randomResult").innerHTML = "";
-  const response = await fetch(`/games?${buildParams()}`);
-  const data = await response.json();
-  const inLibrary = getSource() === "library";
-
-  $("message").textContent = `${data.count} games found` +
-    (data.count > data.games.length ? ` (showing ${data.games.length})` : "");
-  $("results").innerHTML = data.games.map((g) => `
+// Component: one game card with its button
+const GameCard = {
+  props: ["game", "inLibrary"],
+  emits: ["add", "remove"],
+  data() {
+    return { added: false };
+  },
+  computed: {
+    label() {
+      return describeGame(this.game);
+    },
+  },
+  methods: {
+    onClick() {
+      if (this.inLibrary) {
+        this.$emit("remove", this.game.id);
+      } else {
+        this.$emit("add", this.game.id);
+        this.added = true;
+      }
+    },
+  },
+  template: `
     <li>
-      <span>${gameLine(g)}</span>
-      <button data-id="${g.id}" data-action="${inLibrary ? "remove" : "add"}">
-        ${inLibrary ? "Remove" : "Add to library"}
+      <span>{{ label }}</span>
+      <button :disabled="added" @click="onClick">
+        {{ inLibrary ? "Remove" : (added ? "Added ✓" : "Add to library") }}
       </button>
-    </li>`).join("");
-}
+    </li>`,
+};
 
-async function pickRandom() {
-  const response = await fetch(`/games/random?${buildParams()}`);
-  if (!response.ok) {
-    $("randomResult").textContent = "No game matches these criteria.";
-    return;
-  }
-  const game = await response.json();
-  $("randomResult").innerHTML = `<strong>Your pick:</strong> ${gameLine(game)}`;
-}
+createApp({
+  components: { GameCard },
+  setup() {
+    // Interface state: when these change, the page updates by itself
+    const players = ref("");
+    const maxTime = ref("");
+    const maxComplexity = ref("");
+    const source = ref("catalog");
 
-async function onResultClick(event) {
-  const button = event.target.closest("button");
-  if (!button) return;
-  const adding = button.dataset.action === "add";
-  await fetch(`/library/${button.dataset.id}`, { method: adding ? "POST" : "DELETE" });
-  if (adding) {
-    button.textContent = "Added ✓";
-    button.disabled = true;
-  } else {
-    button.closest("li").remove();
-  }
-}
+    const games = ref([]);
+    const count = ref(null);
+    const listSource = ref("catalog");   // source used for the displayed list
+    const randomGame = ref(null);
+    const noRandom = ref(false);
 
-$("searchBtn").addEventListener("click", search);
-$("randomBtn").addEventListener("click", pickRandom);
-$("results").addEventListener("click", onResultClick);
+    const message = computed(() => {
+      if (count.value === null) return "";
+      const shown = games.value.length;
+      return `${count.value} games found` +
+             (count.value > shown ? ` (showing ${shown})` : "");
+    });
+
+    // Blank fields are simply not sent, so the backend ignores them
+    function buildParams(usedSource) {
+      const params = new URLSearchParams({ source: usedSource });
+      const filled = (v) => v !== "" && v !== null;
+      if (filled(players.value)) params.append("players", players.value);
+      if (filled(maxTime.value)) params.append("max_time", maxTime.value);
+      if (filled(maxComplexity.value)) params.append("max_complexity", maxComplexity.value);
+      return params;
+    }
+
+    async function search() {
+      const usedSource = source.value;
+      randomGame.value = null;
+      noRandom.value = false;
+      const response = await fetch(`/games?${buildParams(usedSource)}`);
+      const data = await response.json();
+      games.value = data.games;
+      count.value = data.count;
+      listSource.value = usedSource;
+    }
+
+    async function pickRandom() {
+      const response = await fetch(`/games/random?${buildParams(source.value)}`);
+      if (!response.ok) {
+        randomGame.value = null;
+        noRandom.value = true;
+        return;
+      }
+      randomGame.value = await response.json();
+      noRandom.value = false;
+    }
+
+    async function addGame(id) {
+      await fetch(`/library/${id}`, { method: "POST" });
+    }
+
+    async function removeGame(id) {
+      await fetch(`/library/${id}`, { method: "DELETE" });
+      games.value = games.value.filter((g) => g.id !== id);
+      count.value -= 1;
+    }
+
+    return {
+      players, maxTime, maxComplexity, source,
+      games, listSource, randomGame, noRandom, message,
+      search, pickRandom, addGame, removeGame, describeGame,
+    };
+  },
+}).mount("#app");

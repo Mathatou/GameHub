@@ -5,30 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Board Game Finder</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
 </head>
 <body>
-  <main>
+  <main id="app">
     <h1>Board Game Finder</h1>
 
     <section class="panel">
       <div class="source">
-        <label><input type="radio" name="source" value="catalog" checked> Catalog</label>
-        <label><input type="radio" name="source" value="library"> My library</label>
+        <label><input type="radio" value="catalog" v-model="source"> Catalog</label>
+        <label><input type="radio" value="library" v-model="source"> My library</label>
       </div>
       <div class="filters">
-        <label>Players <input id="players" type="number" min="1" placeholder="any"></label>
-        <label>Max time (min) <input id="maxTime" type="number" min="1" placeholder="any"></label>
-        <label>Max complexity (1-5) <input id="maxComplexity" type="number" min="1" max="5" step="0.1" placeholder="any"></label>
+        <label>Players <input type="number" min="1" placeholder="any" v-model="players"></label>
+        <label>Max time (min) <input type="number" min="1" placeholder="any" v-model="maxTime"></label>
+        <label>Max complexity (1-5) <input type="number" min="1" max="5" step="0.1" placeholder="any" v-model="maxComplexity"></label>
       </div>
       <div class="actions">
-        <button id="searchBtn">Search</button>
-        <button id="randomBtn" class="secondary">Pick random</button>
+        <button @click="search">Search</button>
+        <button class="secondary" @click="pickRandom">Pick random</button>
       </div>
     </section>
 
-    <p id="message"></p>
-    <div id="randomResult"></div>
-    <ul id="results"></ul>
+    <p>{{ message }}</p>
+
+    <div id="randomResult" v-if="randomGame || noRandom">
+      <template v-if="randomGame"><strong>Your pick:</strong> {{ describeGame(randomGame) }}</template>
+      <template v-else>No game matches these criteria.</template>
+    </div>
+
+    <ul id="results">
+      <game-card v-for="game in games" :key="game.id" :game="game"
+                 :in-library="listSource === 'library'"
+                 @add="addGame" @remove="removeGame"></game-card>
+    </ul>
   </main>
   <script src="app.js"></script>
 </body>
