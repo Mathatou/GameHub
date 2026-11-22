@@ -1,0 +1,2 @@
+Delete games with min players or complexity 0 inside data.py ?
+Agregate both dataset to obtain best player column
