@@ -16,9 +16,9 @@ class GameEntry(TypedDict):
 
 class GameEntryUpdate(TypedDict, total=False):
     status: str
-    preferred_group_size: int | None
-    my_rating: int | None
-    category: str | None
+    preferred_group_size: int
+    my_rating: int
+    category: str
 
 Library = dict[int, GameEntry]
 
@@ -133,22 +133,37 @@ def clean_library() -> None:
         LIBRARY_FILE.unlink()
 
 
-
 def main():
     clean_library()
-    test_id = 40368
-    player_range = (2, 4)
 
-    # Create a test entry
-    add_to_lib(test_id)
+    test_id = 40368
+    unknown_id = 999999
+    player_range = (2, 4)
 
     passed = 0
     failed = 0
+
+    baseline = {
+        "status": "to_play",
+        "preferred_group_size": None,
+        "my_rating": None,
+        "category": None
+    }
+
+    def reset_entry():
+        if test_id not in get_all_entries():
+            add_to_lib(test_id)
+
+        # Restore the complete baseline directly.
+        lib = get_all_entries()
+        lib[test_id] = baseline.copy()
+        write_lib(lib)
 
     def run_test(name, test_function):
         nonlocal passed, failed
 
         try:
+            reset_entry()
             test_function()
             print(f"[PASS] {name}")
             passed += 1
@@ -164,113 +179,225 @@ def main():
         except Exception as e:
             raise AssertionError(
                 f"Expected {expected_exception.__name__}, "
-                f"got {type(e).__name__}"
+                f"got {type(e).__name__}: {e}"
             )
+
         raise AssertionError(
-            f"Expected {expected_exception.__name__}, but no exception was raised"
+            f"Expected {expected_exception.__name__}, "
+            "but no exception was raised"
         )
 
-    # 1. Rating 7
-    def test_rating_too_high():
+    def expect_invalid_unchanged(payload):
+        original = get_entry(test_id).copy()
+
         expect_exception(
             InvalidEntryError,
-            lambda: update_entry(test_id, player_range, {"my_rating": 7})
+            lambda: update_entry(test_id, player_range, payload)
         )
 
-    # 2. Invalid rating types
+        current = get_entry(test_id)
+
+        if current != original:
+            raise AssertionError(
+                f"Entry changed after invalid update!\n"
+                f"Before: {original}\n"
+                f"After: {current}"
+            )
+
+    # --------------------------------------------------
+    # POSITIVE TESTS
+    # --------------------------------------------------
+
+    def test_default_status():
+        result = add_to_lib(40369)
+
+        if result["status"] != "to_play":
+            raise AssertionError(
+                f"Expected 'to_play', got {result['status']}"
+            )
+
+        if result["preferred_group_size"] is not None:
+            raise AssertionError("Unexpected default group size")
+
+        if result["my_rating"] is not None:
+            raise AssertionError("Unexpected default rating")
+
+        if result["category"] is not None:
+            raise AssertionError("Unexpected default category")
+
+        # Remove the additional test entry.
+        remove_from_lib(40369)
+
+    def test_valid_single_field():
+        result = update_entry(
+            test_id, player_range, {"status": "played"}
+        )
+
+        stored = get_entry(test_id)
+
+        if result != stored:
+            raise AssertionError("Returned entry differs from stored entry")
+
+        if result["status"] != "played":
+            raise AssertionError("Status was not updated")
+
+        if set(result) != set(baseline):
+            raise AssertionError("Returned entry is incomplete")
+
+        for key in baseline:
+            if key != "status" and result[key] != baseline[key]:
+                raise AssertionError(f"Unexpected change to {key}")
+
+    def test_partial_update_preserves_other_fields():
+        initial = {
+            "status": "played",
+            "preferred_group_size": 3,
+            "my_rating": 4,
+            "category": "friends"
+        }
+
+        update_entry(test_id, player_range, initial)
+        update_entry(test_id, player_range, {"my_rating": 5})
+
+        expected = {
+            "status": "played",
+            "preferred_group_size": 3,
+            "my_rating": 5,
+            "category": "friends"
+        }
+
+        if get_entry(test_id) != expected:
+            raise AssertionError(
+                f"Expected {expected}, got {get_entry(test_id)}"
+            )
+
+    def test_empty_update():
+        result = update_entry(test_id, player_range, {})
+
+        if result != baseline:
+            raise AssertionError("Empty update modified the entry")
+
+        if get_entry(test_id) != baseline:
+            raise AssertionError("Stored entry changed after empty update")
+
+    def test_group_size_boundaries():
+        for value in (2, 4):
+            result = update_entry(
+                test_id, player_range,
+                {"preferred_group_size": value}
+            )
+
+            if result["preferred_group_size"] != value:
+                raise AssertionError(f"Boundary {value} was not stored")
+
+    # --------------------------------------------------
+    # NEGATIVE TESTS
+    # --------------------------------------------------
+
+    def test_rating_too_high():
+        expect_invalid_unchanged({"my_rating": 7})
+
     def test_invalid_rating_types():
         for value in ("5", True, 4.5):
-            expect_exception(
-                InvalidEntryError,
-                lambda value=value: update_entry(
-                    test_id, player_range, {"my_rating": value}
-                )
-            )
+            expect_invalid_unchanged({"my_rating": value})
 
-    # 3. Group size outside the range
     def test_group_size_outside_range():
         for value in (1, 5):
-            expect_exception(
-                InvalidEntryError,
-                lambda value=value: update_entry(
-                    test_id, player_range, {"preferred_group_size": value}
-                )
-            )
+            expect_invalid_unchanged({"preferred_group_size": value})
 
-    # 4. None for each field
+    def test_bool_group_size():
+        for value in (True, False):
+            expect_invalid_unchanged({"preferred_group_size": value})
+
+    def test_status_cannot_be_none():
+        expect_invalid_unchanged({"status": None})
+
     def test_none_values():
         for field in (
-            "status",
             "preferred_group_size",
             "my_rating",
             "category"
         ):
-            expect_exception(
-                InvalidEntryError,
-                lambda field=field: update_entry(
-                    test_id, player_range, {field: None}
-                )
-            )
+            expect_invalid_unchanged({field: None})
 
-    # 5. Unknown field
     def test_unknown_field():
-        expect_exception(
-            InvalidEntryError,
-            lambda: update_entry(
-                test_id, player_range, {"colour": "blue"}
-            )
-        )
+        expect_invalid_unchanged({"colour": "blue"})
 
-    # 6. Valid field + invalid field (atomicity)
+    def test_invalid_status():
+        for value in ("unknown", 123):
+            expect_invalid_unchanged({"status": value})
+
+    def test_invalid_category():
+        for value in ("unknown", 123):
+            expect_invalid_unchanged({"category": value})
+
+    def test_non_dictionary_input():
+        for value in ([], 123, "hello"):
+            expect_invalid_unchanged(value)
+
     def test_valid_and_invalid_field():
-        original_entry = get_entry(test_id).copy()
+        expect_invalid_unchanged({
+            "status": "played",
+            "my_rating": 7
+        })
 
-        expect_exception(
-            InvalidEntryError,
-            lambda: update_entry(
-                test_id,
-                player_range,
-                {
-                    "status": "played",
-                    "my_rating": 7
-                }
-            )
-        )
-
-        updated_entry = get_entry(test_id)
-
-        if updated_entry != original_entry:
-            raise AssertionError(
-                "Entry was modified despite an invalid update"
-            )
-
-    # 7. Unknown ID
     def test_unknown_id():
         expect_exception(
             IDNotFoundInLibraryError,
             lambda: update_entry(
-                999999, player_range, {"status": "played"}
+                unknown_id, player_range, {"status": "played"}
             )
         )
 
-    # Run tests
-    print("\n--- Library update tests ---\n")
+    # --------------------------------------------------
+    # TEST REGISTRY
+    # --------------------------------------------------
 
-    run_test("Rating 7", test_rating_too_high)
-    run_test("Invalid rating types (str, bool, float)", test_invalid_rating_types)
-    run_test("Group size outside range (2, 4)", test_group_size_outside_range)
-    run_test("None values for all fields", test_none_values)
-    run_test("Unknown field 'colour'", test_unknown_field)
-    run_test("Valid + invalid field (no partial update)", test_valid_and_invalid_field)
-    run_test("Unknown ID", test_unknown_id)
+    tests = [
+        # Positive tests
+        ("Default status is to_play", test_default_status),
+        ("Valid single-field update", test_valid_single_field),
+        ("Partial update preserves other fields",
+         test_partial_update_preserves_other_fields),
+        ("Empty update", test_empty_update),
+        ("Group size boundaries (2 and 4)",
+         test_group_size_boundaries),
 
-    # Results
-    print("\n--- Results ---")
-    print(f"Passed: {passed}")
-    print(f"Failed: {failed}")
-    print(f"Total:  {passed + failed}")
+        # Negative tests
+        ("Rating 7", test_rating_too_high),
+        ("Invalid rating types", test_invalid_rating_types),
+        ("Group size outside range (1 and 5)",
+         test_group_size_outside_range),
+        ("Boolean group size", test_bool_group_size),
+        ("Status cannot be None", test_status_cannot_be_none),
+        ("None values for optional fields", test_none_values),
+        ("Unknown field 'colour'", test_unknown_field),
+        ("Invalid status", test_invalid_status),
+        ("Invalid category", test_invalid_category),
+        ("Non-dictionary input", test_non_dictionary_input),
+        ("Valid + invalid field (atomicity)",
+         test_valid_and_invalid_field),
+        ("Unknown ID", test_unknown_id),
+    ]
 
-    clean_library()
+    # --------------------------------------------------
+    # RUN TESTS
+    # --------------------------------------------------
+
+    print("\n========== LIBRARY TESTS ==========\n")
+
+    try:
+        for name, test_function in tests:
+            run_test(name, test_function)
+
+        print("\n========== RESULTS ==========")
+        print(f"Passed: {passed}")
+        print(f"Failed: {failed}")
+        print(f"Total:  {passed + failed}")
+
+    finally:
+        clean_library()
+
 
 if __name__ == "__main__":
     main()
