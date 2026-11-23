@@ -122,12 +122,6 @@ def get_entry(pID: int) -> GameEntry:
     else:
         raise IDNotFoundInLibraryError(f"Entry {pID} does not exist in library")
 
-# get all entries in the library
-# TODO Should return the name of the game and the values
-def get_all_entries() -> Library:
-    lib = read_lib()
-    return lib
-
 def clean_library() -> None:
     if LIBRARY_FILE.exists():
         LIBRARY_FILE.unlink()
@@ -151,11 +145,11 @@ def main():
     }
 
     def reset_entry():
-        if test_id not in get_all_entries():
+        if test_id not in read_lib():
             add_to_lib(test_id)
 
         # Restore the complete baseline directly.
-        lib = get_all_entries()
+        lib = read_lib()
         lib[test_id] = baseline.copy()
         write_lib(lib)
 

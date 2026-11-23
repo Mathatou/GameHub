@@ -1,9 +1,9 @@
-import numpy as np
 from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 from .data import load_games
 from .filters import filter_games
@@ -14,17 +14,12 @@ from .library import (
     add_to_lib,
     InvalidEntryError,
     IDNotFoundInLibraryError,
-    IDAlreadyExistsError,
-    GameEntryUpdate
+    IDAlreadyExistsError
 )
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 app = FastAPI(title="Board Game Finder")
 GAMES = load_games()
-
-
-
-from fastapi.responses import JSONResponse
 
 @app.exception_handler(InvalidEntryError)
 async def invalid_entry_handler(request, exc):
@@ -33,7 +28,6 @@ async def invalid_entry_handler(request, exc):
         content={"detail": str(exc)}
     )
 
-
 @app.exception_handler(IDNotFoundInLibraryError)
 async def not_found_handler(request, exc):
     return JSONResponse(
@@ -41,15 +35,12 @@ async def not_found_handler(request, exc):
         content={"detail": str(exc)}
     )
 
-
 @app.exception_handler(IDAlreadyExistsError)
 async def already_exists_handler(request, exc):
     return JSONResponse(
         status_code=409,
         content={"detail": str(exc)}
     )
-
-
 
 def search(players, max_time, max_complexity, source):
     only_ids = read_lib().keys() if source == "library" else None
@@ -75,7 +66,6 @@ def random_game(players: Optional[int] = Query(None, ge=1),
         raise HTTPException(404, "No game matches these criteria")
     return result.sample(1).iloc[0].to_dict()
 
-
 @app.get("/library")
 def get_library():
     return GAMES[GAMES["id"].isin(read_lib().keys())].to_dict("records")
@@ -90,10 +80,11 @@ def add_to_library(game_id: int):
 def remove_from_library(game_id: int):
     if not (GAMES["id"] == game_id).any():
         raise HTTPException(404, "Unknown game")
-    return remove_from_lib(game_id)
+    return {"library_size": remove_from_lib(game_id)}
         
 @app.patch("/library/{game_id}")
-def update_library(game_id: int, body : GameEntryUpdate):
+def update_library(game_id: int, body : dict):
+    # let body be a dict so that it is catched by the Exceptions
     game = GAMES[GAMES["id"] == game_id]
     if game.empty:
         raise HTTPException(404, "Unknown game")
