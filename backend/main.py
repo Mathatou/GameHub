@@ -1,4 +1,4 @@
-import json
+import numpy as np
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -7,26 +7,52 @@ from fastapi.staticfiles import StaticFiles
 
 from .data import load_games
 from .filters import filter_games
-
+from .library import (
+    update_entry,
+    read_lib,
+    remove_from_lib,
+    add_to_lib,
+    InvalidEntryError,
+    IDNotFoundInLibraryError,
+    IDAlreadyExistsError,
+    GameEntryUpdate
+)
 BASE_DIR = Path(__file__).resolve().parent.parent
-LIBRARY_FILE = BASE_DIR / "data" / "library.json"
 
 app = FastAPI(title="Board Game Finder")
 GAMES = load_games()
 
 
-def load_library() -> set[int]:
-    if LIBRARY_FILE.exists():
-        return set(json.loads(LIBRARY_FILE.read_text()))
-    return set()
+
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(InvalidEntryError)
+async def invalid_entry_handler(request, exc):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": str(exc)}
+    )
 
 
-def save_library(ids: set[int]) -> None:
-    LIBRARY_FILE.write_text(json.dumps(sorted(ids)))
+@app.exception_handler(IDNotFoundInLibraryError)
+async def not_found_handler(request, exc):
+    return JSONResponse(
+        status_code=404,
+        content={"detail": str(exc)}
+    )
+
+
+@app.exception_handler(IDAlreadyExistsError)
+async def already_exists_handler(request, exc):
+    return JSONResponse(
+        status_code=409,
+        content={"detail": str(exc)}
+    )
+
 
 
 def search(players, max_time, max_complexity, source):
-    only_ids = load_library() if source == "library" else None
+    only_ids = read_lib().keys() if source == "library" else None
     return filter_games(GAMES, players, max_time, max_complexity, only_ids)
 
 
@@ -52,26 +78,27 @@ def random_game(players: Optional[int] = Query(None, ge=1),
 
 @app.get("/library")
 def get_library():
-    return GAMES[GAMES["id"].isin(load_library())].to_dict("records")
-
+    return GAMES[GAMES["id"].isin(read_lib().keys())].to_dict("records")
 
 @app.post("/library/{game_id}")
 def add_to_library(game_id: int):
     if not (GAMES["id"] == game_id).any():
         raise HTTPException(404, "Unknown game")
-    ids = load_library()
-    ids.add(game_id)
-    save_library(ids)
-    return {"library_size": len(ids)}
-
-
+    return add_to_lib(game_id)
+    
 @app.delete("/library/{game_id}")
 def remove_from_library(game_id: int):
-    ids = load_library()
-    ids.discard(game_id)
-    save_library(ids)
-    return {"library_size": len(ids)}
-
-
+    if not (GAMES["id"] == game_id).any():
+        raise HTTPException(404, "Unknown game")
+    return remove_from_lib(game_id)
+        
+@app.patch("/library/{game_id}")
+def update_library(game_id: int, body : GameEntryUpdate):
+    game = GAMES[GAMES["id"] == game_id]
+    if game.empty:
+        raise HTTPException(404, "Unknown game")
+    min_players = int(game.iloc[0]["min_players"])
+    max_players = int(game.iloc[0]["max_players"])
+    return update_entry(game_id, (min_players, max_players),body)
 # Must stay last: serves the frontend at http://localhost:8000/
 app.mount("/", StaticFiles(directory=BASE_DIR / "frontend", html=True), name="frontend")
