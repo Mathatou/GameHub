@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Literal, Optional
+import random
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
@@ -74,7 +75,8 @@ def random_game(players: Optional[int] = Query(None, ge=1),
         raise HTTPException(404, "No game matches these criteria")
     if source == "library":
         result = join_records_and_library(result.to_dict("records"), lib)
-        return result[0]  # return the first record from the list
+        random_index = random.randint(0, len(result)-1)
+        return result[random_index]
     return result.sample(1).iloc[0].to_dict()
 
 @app.get("/library")
