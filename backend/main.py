@@ -12,6 +12,7 @@ from .library import (
     read_lib,
     remove_from_lib,
     add_to_lib,
+    join_records_and_library,
     InvalidEntryError,
     IDNotFoundInLibraryError,
     IDAlreadyExistsError
@@ -21,6 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 app = FastAPI(title="Board Game Finder")
 GAMES = load_games()
 
+# === EXCEPTION HANDLERS ===
 @app.exception_handler(InvalidEntryError)
 async def invalid_entry_handler(request, exc):
     return JSONResponse(
@@ -41,9 +43,10 @@ async def already_exists_handler(request, exc):
         status_code=409,
         content={"detail": str(exc)}
     )
+# === EXCEPTION HANDLERS ===
 
-def search(players, max_time, max_complexity, source):
-    only_ids = read_lib().keys() if source == "library" else None
+def search(players, max_time, max_complexity, source, pLib):
+    only_ids = pLib.keys() if source == "library" else None
     return filter_games(GAMES, players, max_time, max_complexity, only_ids)
 
 
@@ -52,7 +55,11 @@ def get_games(players: Optional[int] = Query(None, ge=1),
               max_time: Optional[int] = Query(None, ge=1),
               max_complexity: Optional[float] = Query(None, ge=1, le=5),
               source: Literal["catalog", "library"] = "catalog"):
-    result = search(players, max_time, max_complexity, source)
+    lib = read_lib() 
+    result = search(players, max_time, max_complexity, source, lib)
+    if source == "library":
+        result = join_records_and_library(result.to_dict("records"), lib)
+        return {"count": len(result), "games": result[:50]}
     return {"count": len(result), "games": result.head(50).to_dict("records")}
 
 
@@ -61,14 +68,20 @@ def random_game(players: Optional[int] = Query(None, ge=1),
                 max_time: Optional[int] = Query(None, ge=1),
                 max_complexity: Optional[float] = Query(None, ge=1, le=5),
                 source: Literal["catalog", "library"] = "catalog"):
-    result = search(players, max_time, max_complexity, source)
+    lib = read_lib()
+    result = search(players, max_time, max_complexity, source, lib)
     if result.empty:
         raise HTTPException(404, "No game matches these criteria")
+    if source == "library":
+        result = join_records_and_library(result.to_dict("records"), lib)
+        return result[0]  # return the first record from the list
     return result.sample(1).iloc[0].to_dict()
 
 @app.get("/library")
 def get_library():
-    return GAMES[GAMES["id"].isin(read_lib().keys())].to_dict("records")
+    lib = read_lib()
+    records = GAMES[GAMES["id"].isin(lib.keys())].to_dict("records") 
+    return join_records_and_library(records, lib) 
 
 @app.post("/library/{game_id}")
 def add_to_library(game_id: int):
