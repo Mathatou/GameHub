@@ -59,7 +59,7 @@ def get_games(players: Optional[int] = Query(None, ge=1),
     lib = read_lib() 
     result = search(players, max_time, max_complexity, source, lib)
     if source == "library":
-        result = join_records_and_library(result.to_dict("records"), lib)
+        result = join_records_and_library(result.head(50).to_dict("records"), lib)
         return {"count": len(result), "games": result[:50]}
     return {"count": len(result), "games": result.head(50).to_dict("records")}
 

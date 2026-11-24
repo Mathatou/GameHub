@@ -123,7 +123,7 @@ def get_entry(pID: int) -> GameEntry:
         raise IDNotFoundInLibraryError(f"Entry {pID} does not exist in library")
 
 # Adds the library data to the records if the record's ID is in the library. 
-# This is useful for merging the library data with the game catalog data.
+# This is used for merging the library data and the game catalog data into another dict.
 def join_records_and_library(records: list[dict],pLib: dict) -> list[dict]:
     return [
         {**record, **pLib[record["id"]]}
