@@ -1,5 +1,6 @@
-const { createApp, ref, computed } = Vue;
+import {getGame,getRandomGame,removeGameFromLib,addGameToLib} from "./api.js";
 
+const { createApp, ref, computed } = Vue;
 function describeGame(g) {
   return `${g.name} (${g.min_players}-${g.max_players} players, ` +
          `${g.playing_time} min, complexity ${g.complexity.toFixed(1)})`;
@@ -68,36 +69,30 @@ createApp({
       return params;
     }
 
-    async function search() {
+    async function search()
+    {
       const usedSource = source.value;
-      randomGame.value = null;
-      noRandom.value = false;
-      const response = await fetch(`/games?${buildParams(usedSource)}`);
-      const data = await response.json();
+      const data = await getGame(buildParams(usedSource));
       games.value = data.games;
       count.value = data.count;
       listSource.value = usedSource;
     }
 
-    async function pickRandom() {
-      const response = await fetch(`/games/random?${buildParams(source.value)}`);
-      if (!response.ok) {
-        randomGame.value = null;
-        noRandom.value = true;
-        return;
-      }
-      randomGame.value = await response.json();
-      noRandom.value = false;
+    async function pickRandom()
+    {
+      const usedSource = source.value;
+      const data = await getRandomGame(buildParams(usedSource));
+      randomGame.value = data;
+      noRandom.value = data === null;;
+    }
+    async function removeGame(id) 
+    {
+      await removeGameFromLib(id);
     }
 
-    async function addGame(id) {
-      await fetch(`/library/${id}`, { method: "POST" });
-    }
-
-    async function removeGame(id) {
-      await fetch(`/library/${id}`, { method: "DELETE" });
-      games.value = games.value.filter((g) => g.id !== id);
-      count.value -= 1;
+    async function addGame(id) 
+    {
+      await addGameToLib(id);
     }
 
     return {
