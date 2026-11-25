@@ -71,6 +71,8 @@ createApp({
 
     async function search()
     {
+      randomGame.value = null;
+      noRandom.value = false;
       const usedSource = source.value;
       const data = await getGame(buildParams(usedSource));
       games.value = data.games;
@@ -83,11 +85,13 @@ createApp({
       const usedSource = source.value;
       const data = await getRandomGame(buildParams(usedSource));
       randomGame.value = data;
-      noRandom.value = data === null;;
+      noRandom.value = data === null;
     }
     async function removeGame(id) 
     {
       await removeGameFromLib(id);
+      games.value = games.value.filter(g => g.id !== id);
+      count.value--;
     }
 
     async function addGame(id) 
