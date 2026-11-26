@@ -119,7 +119,8 @@ createApp({
     async function loadLibrary() {
       const receipt = await getLibrary();
       if (!receipt.ok) {
-        notify("Your library could not be loaded.", "error", true, {
+        const sticky = true;
+        notify("Your library could not be loaded.", "error", sticky, {
           label: "Retry",
           action: loadLibrary,
         });
