@@ -12,7 +12,11 @@
     <h1>Board Game Finder</h1>
 
     <section id="notifications" aria-live="polite">
-      <div v-for="notification in lNotifications" :key="notification.id">
+      <div
+        v-for="notification in lNotifications"
+        :key="notification.id"
+        :class="['notification', notification.isSticky ? 'sticky' : notification.kind]"
+      >
         {{ notification.content }}
         <small v-if="notification.remainingSeconds !== null">
           (closing in {{ notification.remainingSeconds }}s)

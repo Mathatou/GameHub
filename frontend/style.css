@@ -38,7 +38,18 @@ main {
 #notifications button {
     margin-left: auto;
 }
-
+#notifications > .notification.success {
+    background: #d9f7df;
+    border-left: 4px solid #31cf41;
+}
+#notifications > .notification.error {
+    background: #ffdbd6;
+    border-left: 4px solid #d43f28;
+}
+#notifications > .notification.sticky {
+    background: #f3d9fc;
+    border-left: 4px solid #a950c9;
+}
 .panel {
     background: #fff;
     padding: 16px;
