@@ -43,6 +43,7 @@ function addNotification(pNotification)
             dismissNotification(lNotifications.value[0].id);
     }
     lNotifications.value.push(pNotification);
+    mergeNotifications();
     autoDismissNotifications(pNotification);
 }
 
