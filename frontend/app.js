@@ -1,10 +1,36 @@
-import {getGame,getRandomGame,removeGameFromLib,addGameToLib} from "./api.js";
+import {
+  getGame,
+  getRandomGame,
+  removeGameFromLib,
+  addGameToLib
+} from "./api.js";
+
+import {
+  myNotification,
+  lNotifications,
+  addNotification,
+  dismissNotification,
+  mergeNotifications
+} from "./notifications.js";
+
+let nextNotificationId = 1; // Unique ID for each notification
 
 const { createApp, ref, computed } = Vue;
 function describeGame(g) {
   return `${g.name} (${g.min_players}-${g.max_players} players, ` +
          `${g.playing_time} min, complexity ${g.complexity.toFixed(1)})`;
 }
+
+function notify(content, kind, isSticky = false, {label = null, action = null } = {}) 
+{
+  const notification = new myNotification(nextNotificationId++, 
+    content, 
+    kind, 
+    isSticky, 
+    {label, action});
+  addNotification(notification);
+}
+
 
 // Component: one game card with its button
 const GameCard = {
@@ -69,40 +95,85 @@ createApp({
       return params;
     }
 
-    async function search()
-    {
+    async function search() {
+      const usedSource = source.value;
       randomGame.value = null;
       noRandom.value = false;
-      const usedSource = source.value;
-      const data = await getGame(buildParams(usedSource));
+      const response = await fetch(`/games?${buildParams(usedSource)}`);
+      const data = await response.json();
       games.value = data.games;
       count.value = data.count;
       listSource.value = usedSource;
     }
 
-    async function pickRandom()
-    {
-      const usedSource = source.value;
-      const data = await getRandomGame(buildParams(usedSource));
-      randomGame.value = data;
-      noRandom.value = data === null;
-    }
-    async function removeGame(id) 
-    {
-      await removeGameFromLib(id);
-      games.value = games.value.filter(g => g.id !== id);
-      count.value--;
+    async function pickRandom() {
+      const response = await fetch(`/games/random?${buildParams(source.value)}`);
+      if (!response.ok) {
+        randomGame.value = null;
+        noRandom.value = true;
+        return;
+      }
+      randomGame.value = await response.json();
+      noRandom.value = false;
     }
 
-    async function addGame(id) 
-    {
-      await addGameToLib(id);
+    async function addGame(id) {
+      const receipt = await addGameToLib(id);
+      if (!receipt.ok) {
+        notify(
+          `Failed to add game: ${receipt.error ?? "Unknown error"}`,
+          "failure",
+          false
+        );
+        return;
+      }
+      notify("Game added successfully!", "success");
     }
 
+    async function removeGame(id) {
+      const receipt = await removeGameFromLib(id);
+      if (!receipt.ok) {
+        notify(
+          `Failed to remove game: ${receipt.error ?? "Unknown error"}`,
+          "failure",
+          false
+        );
+        return;
+      }
+      games.value = games.value.filter((game) => game.id !== id);
+      count.value -= 1;
+      notify(`Game removed successfully!`, "success");
+    }
+
+    // async function search()
+    // {
+    //   randomGame.value = null;
+    //   noRandom.value = false;
+    //   const usedSource = source.value;
+    //   const data = await getGame(buildParams(usedSource));
+    //   games.value = data.games;
+    //   count.value = data.count;
+    //   listSource.value = usedSource;
+    // }
+
+    // async function pickRandom()
+    // {
+    //   const usedSource = source.value;
+    //   const data = await getRandomGame(buildParams(usedSource));
+    //   randomGame.value = data;
+    //   noRandom.value = data === null;
+    // }
+    // async function removeGame(id) 
+    // {
+    //   await removeGameFromLib(id);
+    //   games.value = games.value.filter(g => g.id !== id);
+    //   count.value--;
+    // }
     return {
       players, maxTime, maxComplexity, source,
       games, listSource, randomGame, noRandom, message,
       search, pickRandom, addGame, removeGame, describeGame,
+      lNotifications, myNotification, addNotification, dismissNotification, mergeNotifications
     };
   },
 }).mount("#app");

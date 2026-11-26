@@ -3,7 +3,7 @@
 class Receipt {
     constructor(status, data = null, error = null) {
         this.status = status;
-        this.ok = status !== null && status >= 200 && status < 300;
+        this.ok = status !== null && status >= 200 && status < 300 && error === null;
         this.data = data;
         this.error = error;
     }
@@ -24,15 +24,13 @@ async function request(url, options = {}) {
         return new Receipt(null, null, error.message);
     }
 
-    let rawBody = null;
-    let bodyError = null;
+    let rawBody;
 
     try {
         rawBody = await response.text();
     }
     catch (error) {
-        bodyError = "Unable to read response body";
-        return new Receipt(response.status, null, bodyError);
+        return new Receipt(response.status, null, "Unable to read response body");
     }
 
     // Parse JSON if possible, otherwise preserve text
@@ -43,7 +41,10 @@ async function request(url, options = {}) {
             data = JSON.parse(rawBody);
         }
         catch {
-            return new Receipt(response.status, null, "Response body is not valid JSON");
+            const errorMessage = response.ok
+                ? "Response body is not valid JSON"
+                : rawBody || response.statusText || "HTTP request failed";
+            return new Receipt(response.status, null, errorMessage);
         }
     }
 
@@ -53,9 +54,6 @@ async function request(url, options = {}) {
     if (!response.ok) {
         errorMessage = rawBody || response.statusText || "HTTP request failed";
         return new Receipt(response.status, data, errorMessage);
-    }
-    else if (bodyError !== null) {
-        errorMessage = bodyError;
     }
 
     return new Receipt(response.status, data, errorMessage);

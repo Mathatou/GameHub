@@ -11,6 +11,34 @@ main {
     padding: 24px 16px;
 }
 
+#notifications {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(340px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+}
+
+#notifications > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+}
+
+#notifications button {
+    margin-left: auto;
+}
+
 .panel {
     background: #fff;
     padding: 16px;
@@ -82,4 +110,15 @@ button:disabled {
     margin-bottom: 8px;
     padding: 10px 14px;
     border-radius: 8px;
+}
+
+@media (max-width: 600px) {
+    #notifications {
+        top: auto;
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+        width: auto;
+        max-height: 40vh;
+    }
 }

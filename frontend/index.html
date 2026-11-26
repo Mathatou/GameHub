@@ -11,6 +11,15 @@
   <main id="app">
     <h1>Board Game Finder</h1>
 
+    <section id="notifications" aria-live="polite">
+      <div v-for="notification in lNotifications" :key="notification.id">
+        {{ notification.content }}
+        <small v-if="notification.remainingSeconds !== null">
+          (closing in {{ notification.remainingSeconds }}s)
+        </small>
+        <button @click="dismissNotification(notification.id)">Dismiss</button>
+      </div>
+    </section>
     <section class="panel">
       <div class="source">
         <label><input type="radio" value="catalog" v-model="source"> Catalog</label>
