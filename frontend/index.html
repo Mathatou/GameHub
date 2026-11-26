@@ -21,7 +21,9 @@
           v-if="notification.action"
           @click="runNotificationAction(notification)"
         >{{ notification.label }}</button>
-        <button @click="dismissNotification(notification.id)">Dismiss</button>
+        <button 
+        v-if="!notification.isSticky"
+        @click="dismissNotification(notification.id)">Dismiss</button>
       </div>
     </section>
     <section class="panel">
