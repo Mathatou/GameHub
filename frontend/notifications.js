@@ -1,4 +1,12 @@
-export { addNotification, dismissNotification, mergeNotifications,autoDismissNotifications, myNotification, lNotifications }
+export {
+  addNotification,
+  dismissNotification,
+  mergeNotifications,
+  autoDismissNotifications,
+  myNotification,
+  lNotifications,
+  notify,
+};
 const {ref} = Vue;
 
 
@@ -7,7 +15,7 @@ const failureTimeLimit = 5000; // ms
 
 const notificationTimeouts = {
   success: successTimeLimit,
-  failure: failureTimeLimit,
+  error: failureTimeLimit,
 };
 
 class myNotification 
@@ -30,7 +38,7 @@ class myNotification
 const notificationCountLimit = 5;
 const lNotifications = ref([]);
 const notificationTimers = new Map();
-
+let nextNotificationId = 1; // Unique ID for each notification
 function addNotification(pNotification) 
 {
     if (lNotifications.value.length >= notificationCountLimit) {
@@ -92,4 +100,16 @@ function autoDismissNotifications(notification)
         dismissNotification(notification.id);
     }, notification.timeout);
     notificationTimers.set(notification.id, { timeoutId, intervalId });
+}
+
+
+function notify(content, kind, isSticky = false, { label = null, action = null } = {}) {
+    const notification = new myNotification(
+        nextNotificationId++,
+        content,
+        kind,
+        isSticky,
+        { label, action }
+    );
+    addNotification(notification);
 }

@@ -74,3 +74,7 @@ export function getGame(params) {
 export function getRandomGame(params) {
     return request(`/games/random?${params}`);
 }
+
+export function getLibrary() {
+    return request("/library");
+}

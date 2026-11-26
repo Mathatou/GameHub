@@ -1,19 +1,16 @@
 import {
   getGame,
   getRandomGame,
+  getLibrary,
   removeGameFromLib,
   addGameToLib
 } from "./api.js";
 
 import {
-  myNotification,
   lNotifications,
-  addNotification,
   dismissNotification,
-  mergeNotifications
+  notify
 } from "./notifications.js";
-
-let nextNotificationId = 1; // Unique ID for each notification
 
 const { createApp, ref, computed } = Vue;
 function describeGame(g) {
@@ -21,24 +18,11 @@ function describeGame(g) {
          `${g.playing_time} min, complexity ${g.complexity.toFixed(1)})`;
 }
 
-function notify(content, kind, isSticky = false, {label = null, action = null } = {}) 
-{
-  const notification = new myNotification(nextNotificationId++, 
-    content, 
-    kind, 
-    isSticky, 
-    {label, action});
-  addNotification(notification);
-}
-
 
 // Component: one game card with its button
 const GameCard = {
-  props: ["game", "inLibrary"],
+  props: ["game", "inLibrary", "pending", "libraryReady"],
   emits: ["add", "remove"],
-  data() {
-    return { added: false };
-  },
   computed: {
     label() {
       return describeGame(this.game);
@@ -46,19 +30,21 @@ const GameCard = {
   },
   methods: {
     onClick() {
+      if (this.pending || !this.libraryReady) return;
       if (this.inLibrary) {
         this.$emit("remove", this.game.id);
       } else {
         this.$emit("add", this.game.id);
-        this.added = true;
       }
     },
   },
   template: `
     <li>
       <span>{{ label }}</span>
-      <button :disabled="added" @click="onClick">
-        {{ inLibrary ? "Remove" : (added ? "Added ✓" : "Add to library") }}
+      <button :disabled="pending || !libraryReady" @click="onClick">
+        {{ pending
+          ? (inLibrary ? "Removing..." : "Adding...")
+          : (!libraryReady ? "Loading library..." : (inLibrary ? "Remove" : "Add to library")) }}
       </button>
     </li>`,
 };
@@ -77,6 +63,9 @@ createApp({
     const listSource = ref("catalog");   // source used for the displayed list
     const randomGame = ref(null);
     const noRandom = ref(false);
+    const libraryIds = ref(new Set());
+    const pendingIds = ref(new Set());
+    const libraryReady = ref(false);
 
     const message = computed(() => {
       if (count.value === null) return "";
@@ -84,6 +73,68 @@ createApp({
       return `${count.value} games found` +
              (count.value > shown ? ` (showing ${shown})` : "");
     });
+
+    function operationErrorMessage(receipt, operation) {
+      if (receipt.status === null) {
+        return "Can't reach the server. Check that it is running and try again.";
+      }
+
+      const messages = {
+        add: "The game could not be added. Please try again.",
+        remove: "The game could not be removed. Please try again.",
+        search: "The search failed. Please try again.",
+        random: "Could not pick a random game. Please try again.",
+      };
+      return messages[operation] ?? "Something went wrong. Please try again.";
+    }
+
+    function setLibraryMembership(id, isInLibrary) {
+      const updatedIds = new Set(libraryIds.value);
+      if (isInLibrary) {
+        updatedIds.add(id);
+      } else {
+        updatedIds.delete(id);
+      }
+      libraryIds.value = updatedIds;
+    }
+
+    function setPending(id, isPending) {
+      const updatedIds = new Set(pendingIds.value);
+      if (isPending) {
+        updatedIds.add(id);
+      } else {
+        updatedIds.delete(id);
+      }
+      pendingIds.value = updatedIds;
+    }
+
+    function removeFromLibraryResults(id) {
+      if (listSource.value !== "library") return;
+      games.value = games.value.filter((game) => game.id !== id);
+      if (count.value !== null) {
+        count.value = Math.max(0, count.value - 1);
+      }
+    }
+
+    async function loadLibrary() {
+      const receipt = await getLibrary();
+      if (!receipt.ok) {
+        notify("Your library could not be loaded.", "error", true, {
+          label: "Retry",
+          action: loadLibrary,
+        });
+        return;
+      }
+
+      libraryIds.value = new Set(receipt.data.map((game) => game.id));
+      libraryReady.value = true;
+    }
+
+    async function runNotificationAction(notification) {
+      const action = notification.action;
+      dismissNotification(notification.id);
+      if (action) await action();
+    }
 
     // Blank fields are simply not sent, so the backend ignores them
     function buildParams(usedSource) {
@@ -99,81 +150,78 @@ createApp({
       const usedSource = source.value;
       randomGame.value = null;
       noRandom.value = false;
-      const response = await fetch(`/games?${buildParams(usedSource)}`);
-      const data = await response.json();
-      games.value = data.games;
-      count.value = data.count;
+      const receipt = await getGame(buildParams(usedSource));
+      if (!receipt.ok) {
+        notify(operationErrorMessage(receipt, "search"), "error");
+        return;
+      }
+      games.value = receipt.data.games;
+      count.value = receipt.data.count;
       listSource.value = usedSource;
     }
 
     async function pickRandom() {
-      const response = await fetch(`/games/random?${buildParams(source.value)}`);
-      if (!response.ok) {
-        randomGame.value = null;
-        noRandom.value = true;
+      randomGame.value = null;
+      noRandom.value = false;
+      const receipt = await getRandomGame(buildParams(source.value));
+      if (!receipt.ok) {
+        if (receipt.status === 404) {
+          noRandom.value = true;
+          return;
+        }
+        notify(operationErrorMessage(receipt, "random"), "error");
         return;
       }
-      randomGame.value = await response.json();
-      noRandom.value = false;
+      randomGame.value = receipt.data;
     }
 
     async function addGame(id) {
-      const receipt = await addGameToLib(id);
-      if (!receipt.ok) {
-        notify(
-          // TODO Error message to upgrade : "Game Name" not found in lib
-          `Failed to add game: ${receipt.error ?? "Unknown error"}`,
-          "failure",
-        );
-        return;
+      if (pendingIds.value.has(id)) return;
+      setPending(id, true);
+      try {
+        const receipt = await addGameToLib(id);
+        if (receipt.ok || receipt.status === 409) {
+          setLibraryMembership(id, true);
+          return;
+        }
+        if (receipt.status === 404) {
+          notify("This game could not be found in the catalog.", "error");
+          return;
+        }
+        notify(operationErrorMessage(receipt, "add"), "error");
+      } finally {
+        setPending(id, false);
       }
-      notify("Game added successfully!", "success");
     }
 
     async function removeGame(id) {
-      const receipt = await removeGameFromLib(id);
-      if (!receipt.ok) {
-        notify(
-          // TODO Error message to upgrade : "Game Name" not found in lib 
-          `Failed to remove game: ${receipt.error ?? "Unknown error"}`,
-          "failure",
-        );
-        return;
+      if (pendingIds.value.has(id)) return;
+      const gameName = games.value.find((game) => game.id === id)?.name ?? "Game";
+      setPending(id, true);
+      try {
+        const receipt = await removeGameFromLib(id);
+        if (receipt.ok || receipt.status === 404) {
+          setLibraryMembership(id, false);
+          removeFromLibraryResults(id);
+          if (receipt.ok) {
+            notify(`${gameName} removed from your library.`, "success");
+          }
+          return;
+        }
+        notify(operationErrorMessage(receipt, "remove"), "error");
+      } finally {
+        setPending(id, false);
       }
-      games.value = games.value.filter((game) => game.id !== id);
-      count.value -= 1;
-      notify(`Game removed successfully!`, "success");
     }
 
-    // async function search()
-    // {
-    //   randomGame.value = null;
-    //   noRandom.value = false;
-    //   const usedSource = source.value;
-    //   const data = await getGame(buildParams(usedSource));
-    //   games.value = data.games;
-    //   count.value = data.count;
-    //   listSource.value = usedSource;
-    // }
+    void loadLibrary();
 
-    // async function pickRandom()
-    // {
-    //   const usedSource = source.value;
-    //   const data = await getRandomGame(buildParams(usedSource));
-    //   randomGame.value = data;
-    //   noRandom.value = data === null;
-    // }
-    // async function removeGame(id) 
-    // {
-    //   await removeGameFromLib(id);
-    //   games.value = games.value.filter(g => g.id !== id);
-    //   count.value--;
-    // }
     return {
       players, maxTime, maxComplexity, source,
       games, listSource, randomGame, noRandom, message,
+      libraryIds, pendingIds, libraryReady,
       search, pickRandom, addGame, removeGame, describeGame,
-      lNotifications, myNotification, addNotification, dismissNotification, mergeNotifications
+      lNotifications, dismissNotification, runNotificationAction,
     };
   },
 }).mount("#app");
