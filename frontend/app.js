@@ -121,9 +121,9 @@ createApp({
       const receipt = await addGameToLib(id);
       if (!receipt.ok) {
         notify(
+          // TODO Error message to upgrade : "Game Name" not found in lib
           `Failed to add game: ${receipt.error ?? "Unknown error"}`,
           "failure",
-          false
         );
         return;
       }
@@ -134,9 +134,9 @@ createApp({
       const receipt = await removeGameFromLib(id);
       if (!receipt.ok) {
         notify(
+          // TODO Error message to upgrade : "Game Name" not found in lib 
           `Failed to remove game: ${receipt.error ?? "Unknown error"}`,
           "failure",
-          false
         );
         return;
       }

@@ -34,7 +34,13 @@ const notificationTimers = new Map();
 function addNotification(pNotification) 
 {
     if (lNotifications.value.length >= notificationCountLimit) {
-        dismissNotification(lNotifications.value[0].id);
+        if (lNotifications.value[0].isSticky) 
+        {
+            // If the first notification is sticky, we cannot dismiss it automatically.
+            dismissNotification(lNotifications.value[1].id);
+        }
+        else
+            dismissNotification(lNotifications.value[0].id);
     }
     lNotifications.value.push(pNotification);
     autoDismissNotifications(pNotification);
